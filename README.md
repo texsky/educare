@@ -340,7 +340,7 @@ Add an Nginx reverse proxy (or Traefik) in front of the frontend container and t
 
 > These are created by the seed script (`make seed`).
 > The script clears its demo collections before reseeding: 1 admin, 20 teachers,
-> 120 parents, 300 students, 10 classes, 60 subjects, 30 exams, 3,650 marks,
+> 120 parents, 308 students, 11 classes, 60 subjects, 30 exams, 3,650 marks,
 > 600 published memos/PDFs, 120 notifications, and 150 audit logs.
 
 | Role | Email | Password |
@@ -351,9 +351,10 @@ Add an Nginx reverse proxy (or Traefik) in front of the frontend container and t
 | **Student** | student001@educare.com | `Student@123` |
 
 > ⚠️ Change all passwords immediately after first login in production.
-> All seeded accounts share the role password shown above. Seeded student and
-> parent profiles are linked to their login accounts, classes, and published
-> results.
+> All seeded accounts share the role password shown above. The 300 general
+> students and their linked parents have published results. The eight Class 20A
+> students have student accounts and class enrollment but no parent links or
+> marks, exams, or memos.
 
 ### Add Class 20A students without clearing existing data
 
@@ -363,7 +364,9 @@ Class 20 / Section A and adds the eight names from the supplied image with roll
 numbers 1–8. It does not create marks, exams, parents, or memos and does not
 clear existing collections. Since the image did not include last names, dates
 of birth, or genders, these fields use placeholders (`Student`, `2000-01-01`,
-and `other`). All eight student accounts use the password `Student@123`.
+and `other`). The full seed already includes these students; use the additive
+command when adding them to a database that has already been seeded. All eight
+student accounts use the password `Student@123`.
 
 ### Role Permissions Summary
 

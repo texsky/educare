@@ -5,6 +5,7 @@
 'use strict';
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -42,6 +43,9 @@ const FIRST_NAMES = [
   'Olivia', 'Priya', 'Rohan', 'Sara', 'Sophia', 'Theo', 'Uma', 'Vihaan', 'William',
   'Yara', 'Zara', 'Zayn',
 ];
+const CLASS20_STUDENT_NAMES = [
+  'Akhilesh', 'Ruchi', 'Bhawna', 'Isha', 'Chetan', 'Neeti', 'Chanchal', 'Preeti',
+];
 const LAST_NAMES = [
   'Anderson', 'Bennett', 'Brown', 'Campbell', 'Clark', 'Davis', 'Garcia', 'Hall',
   'Harris', 'Johnson', 'Khan', 'Lee', 'Lewis', 'Martin', 'Miller', 'Morgan',
@@ -74,8 +78,13 @@ const plusDays = (date, days) => {
 };
 
 const pad = (value, length = 3) => String(value).padStart(length, '0');
+const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12;
 
-async function seed({ clearExisting = true, manageConnection = true } = {}) {
+async function seed({
+  clearExisting = true,
+  manageConnection = true,
+  logCredentials = true,
+} = {}) {
   const uri = getMongoUri();
   if (manageConnection) {
     console.log('🌱 Connecting to MongoDB at:', uri.replace(/:[^:@]+@/, ':***@'));
@@ -111,8 +120,20 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
 
     const academicYear = academicYearFor();
     const currentDate = new Date();
+    const passwordHashes = new Map();
+    const insertSeedUsers = async (userRows) => {
+      const hashedRows = await Promise.all(userRows.map(async (user) => {
+        let hashPromise = passwordHashes.get(user.password);
+        if (!hashPromise) {
+          hashPromise = bcrypt.hash(user.password, BCRYPT_SALT_ROUNDS);
+          passwordHashes.set(user.password, hashPromise);
+        }
+        return { ...user, password: await hashPromise };
+      }));
+      return User.insertMany(hashedRows);
+    };
 
-    const [admin] = await User.create([{
+    const [admin] = await insertSeedUsers([{
       name: 'System Administrator',
       email: 'admin@educare.com',
       password: 'Admin@123',
@@ -120,7 +141,7 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
       isActive: true,
     }]);
 
-    const teacherUsers = await User.create(
+    const teacherUsers = await insertSeedUsers(
       TEACHER_NAMES.map(([first, last], index) => ({
         name: `${first} ${last}`,
         email: `teacher${pad(index + 1, 2)}@educare.com`,
@@ -130,7 +151,7 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
       }))
     );
 
-    const parentUsers = await User.create(
+    const parentUsers = await insertSeedUsers(
       Array.from({ length: PARENT_COUNT }, (_, index) => {
         const first = FIRST_NAMES[(index + 4) % FIRST_NAMES.length];
         const last = LAST_NAMES[(index * 7 + 3) % LAST_NAMES.length];
@@ -144,7 +165,7 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
       })
     );
 
-    const studentUsers = await User.create(
+    const studentUsers = await insertSeedUsers(
       Array.from({ length: GRADES.length * SECTIONS.length * STUDENTS_PER_CLASS }, (_, index) => {
         const first = FIRST_NAMES[index % FIRST_NAMES.length];
         const last = LAST_NAMES[Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length];
@@ -171,6 +192,16 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
       subjects: [],
       isActive: true,
     })));
+    const class20 = await Class.create({
+      name: 'Class 20',
+      section: 'A',
+      academicYear,
+      roomNo: 'Room 20A',
+      maxStrength: 40,
+      studentIds: [],
+      subjects: [],
+      isActive: true,
+    });
 
     const teachers = await Teacher.create(TEACHER_NAMES.map(([firstName, lastName], index) => ({
       userId: teacherUsers[index]._id,
@@ -237,6 +268,38 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
         isActive: true,
       };
     }));
+
+    const class20Users = await insertSeedUsers(CLASS20_STUDENT_NAMES.map((firstName, index) => ({
+      name: `${firstName} Student`,
+      email: `class20a${pad(index + 1)}@educare.com`,
+      password: 'Student@123',
+      role: 'student',
+      isActive: true,
+    })));
+    const class20Students = await Student.create(class20Users.map((user, index) => ({
+      userId: user._id,
+      admissionNo: `ADM-${academicYear.slice(0, 4)}-C20A-${pad(index + 1)}`,
+      firstName: CLASS20_STUDENT_NAMES[index],
+      lastName: 'Student',
+      dateOfBirth: new Date('2000-01-01T00:00:00.000Z'),
+      gender: 'other',
+      classId: class20._id,
+      section: 'A',
+      rollNo: index + 1,
+      academicYear,
+      isActive: true,
+    })));
+
+    await Promise.all([
+      Class.updateOne(
+        { _id: class20._id },
+        { $set: { studentIds: class20Students.map((student) => student._id) } }
+      ),
+      ...class20Students.map((student, index) => User.updateOne(
+        { _id: class20Users[index]._id },
+        { $set: { profileRef: student._id, profileModel: 'Student' } }
+      )),
+    ]);
 
     const subjectRows = [];
     const classStudentIds = classes.map(() => []);
@@ -532,7 +595,7 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
 
     const auditActions = ['CREATE', 'UPDATE', 'PUBLISH', 'APPROVE', 'LOGIN'];
     const auditEntities = [
-      ['Student', students], ['Class', classes], ['Exam', createdExams],
+      ['Student', [...students, ...class20Students]], ['Class', [...classes, class20]], ['Exam', createdExams],
       ['Memo', memosRows], ['Notification', notificationRows],
     ];
     const auditRows = Array.from({ length: 150 }, (_, index) => {
@@ -552,15 +615,17 @@ async function seed({ clearExisting = true, manageConnection = true } = {}) {
 
     console.log('\n✅ Seed complete.');
     console.log('   Academic year:', academicYear);
-    console.log('   Users: 1 admin, 20 teachers, 120 parents, 300 students');
-    console.log('   Classes: 10 | Subjects: 60 | Exams: 30');
+    console.log(`   Users: 1 admin, ${teachers.length} teachers, ${parents.length} parents, ${students.length + class20Students.length} students`);
+    console.log(`   Classes: ${classes.length + 1} | Subjects: ${subjects.length} | Exams: ${createdExams.length}`);
     console.log(`   Marks: ${savedMarks.length} | Published memos with PDFs: ${savedMemos.length}`);
     console.log(`   Notifications: ${notificationRows.length} | Audit logs: ${auditRows.length}`);
-    console.log('\n🔑 Demo credentials (all seeded users are active):');
-    console.log('   Admin   admin@educare.com / Admin@123');
-    console.log('   Teacher teacher01@educare.com / Teacher@123');
-    console.log('   Parent  parent001@educare.com / Parent@123');
-    console.log('   Student student001@educare.com / Student@123\n');
+    if (logCredentials) {
+      console.log('\n🔑 Demo credentials (all seeded users are active):');
+      console.log('   Admin   admin@educare.com / Admin@123');
+      console.log('   Teacher teacher01@educare.com / Teacher@123');
+      console.log('   Parent  parent001@educare.com / Parent@123');
+      console.log('   Student student001@educare.com / Student@123\n');
+    }
     return true;
   } finally {
     if (manageConnection) await mongoose.disconnect();
