@@ -254,6 +254,7 @@ Add these environment variables in the Render dashboard:
 | `JWT_SECRET` | A long, random secret for access tokens |
 | `JWT_REFRESH_SECRET` | A separate long, random secret for refresh tokens |
 | `NODE_ENV` | `production` |
+| `SEED_DATA` | Set to `true` to seed demo records on startup, only when every seeded collection is empty; otherwise `false` |
 
 Set any optional email, SMS, school branding, and upload variables there as
 needed. Do not put production secrets in the Dockerfile or commit them to the
@@ -261,6 +262,12 @@ repository. Without a reachable MongoDB URI, the service will not start; do not
 use the Docker Compose hostname `mongodb` for Render. Configure the MongoDB
 provider's network access to allow the Render service to connect. The API
 health check is available at `/health`.
+
+`SEED_DATA` defaults to `false`. Setting it to `true` runs the full demo seed
+after connecting to MongoDB, but only if all collections populated by the seed
+are empty; it skips without modifying existing records. Seeded demo accounts
+use public sample passwords, so change them immediately and disable `SEED_DATA`
+after a successful seed. The manual `make seed` command remains destructive.
 
 Render's container filesystem is ephemeral. If users need uploaded photos and
 memo PDFs to survive redeployments, attach a persistent disk at
@@ -310,6 +317,7 @@ Add an Nginx reverse proxy (or Traefik) in front of the frontend container and t
 | `JWT_REFRESH_EXPIRES_IN` | Refresh token TTL | `30d` |
 | `PORT` | Backend listen port | `5000` |
 | `NODE_ENV` | Environment | `production` |
+| `SEED_DATA` | Seed demo data on startup only when all seeded collections are empty | `false` |
 | `FRONTEND_URL` | Allowed CORS origin | `http://localhost:80` |
 | `SMTP_HOST` | SMTP server host | `smtp.gmail.com` |
 | `SMTP_PORT` | SMTP port | `587` |

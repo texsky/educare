@@ -20,7 +20,7 @@ RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-eng leptonica \
     && addgroup -g 1001 -S nodejs \
     && adduser -S nodejs -u 1001 -G nodejs
 
-ENV NODE_ENV=production REQUIRE_MONGODB_URI=true PORT=10000
+ENV NODE_ENV=production REQUIRE_MONGODB_URI=true PORT=10000 SEED_DATA=true
 WORKDIR /app/backend
 
 COPY --from=backend-deps /app/backend/package.json ./package.json

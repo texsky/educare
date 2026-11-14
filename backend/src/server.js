@@ -20,6 +20,12 @@ const startServer = async () => {
   // Connect to Database
   await connectDB();
 
+  if (process.env.SEED_DATA?.trim().toLowerCase() === 'true') {
+    logger.warn('SEED_DATA=true; demo data will be added only if all seeded collections are empty.');
+    const { seed } = require('./scripts/seed');
+    await seed({ clearExisting: false, manageConnection: false });
+  }
+
   server = http.createServer(app);
 
   server.listen(PORT, () => {

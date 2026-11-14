@@ -1,6 +1,6 @@
 /**
- * Replaces the demo database with a complete, linked school dataset.
- * The script clears every collection it seeds before inserting records.
+ * Seeds a complete, linked demo dataset. The CLI mode clears seeded
+ * collections; startup mode only seeds when every seeded collection is empty.
  */
 'use strict';
 
@@ -75,26 +75,39 @@ const plusDays = (date, days) => {
 
 const pad = (value, length = 3) => String(value).padStart(length, '0');
 
-async function seed() {
+async function seed({ clearExisting = true, manageConnection = true } = {}) {
   const uri = getMongoUri();
-  console.log('🌱 Connecting to MongoDB at:', uri.replace(/:[^:@]+@/, ':***@'));
-  await mongoose.connect(uri);
+  if (manageConnection) {
+    console.log('🌱 Connecting to MongoDB at:', uri.replace(/:[^:@]+@/, ':***@'));
+    await mongoose.connect(uri);
+  }
 
   try {
-    console.log('⚠️  Clearing demo collections before inserting the new dataset…');
-    await Promise.all([
-      User.deleteMany({}),
-      Teacher.deleteMany({}),
-      Student.deleteMany({}),
-      Parent.deleteMany({}),
-      Class.deleteMany({}),
-      Subject.deleteMany({}),
-      Exam.deleteMany({}),
-      Marks.deleteMany({}),
-      Memo.deleteMany({}),
-      Notification.deleteMany({}),
-      AuditLog.deleteMany({}),
-    ]);
+    const seededModels = [
+      User, Teacher, Student, Parent, Class, Subject, Exam, Marks, Memo, Notification, AuditLog,
+    ];
+
+    if (clearExisting) {
+      console.log('⚠️  Clearing demo collections before inserting the new dataset…');
+      await Promise.all(seededModels.map((model) => model.deleteMany({})));
+    } else {
+      const collectionCounts = await Promise.all(
+        seededModels.map((model) => model.countDocuments({}))
+      );
+      const existingCollections = seededModels
+        .filter((_, index) => collectionCounts[index] > 0)
+        .map((model) => model.collection.collectionName);
+
+      if (existingCollections.length) {
+        console.log(
+          `SEED_DATA enabled, but existing data was found in: ${existingCollections.join(', ')}. ` +
+          'Skipping demo seed to preserve database contents.'
+        );
+        return false;
+      }
+
+      console.log('SEED_DATA enabled and seeded collections are empty; inserting demo data.');
+    }
 
     const academicYear = academicYearFor();
     const currentDate = new Date();
@@ -548,12 +561,18 @@ async function seed() {
     console.log('   Teacher teacher01@educare.com / Teacher@123');
     console.log('   Parent  parent001@educare.com / Parent@123');
     console.log('   Student student001@educare.com / Student@123\n');
+    return true;
   } finally {
-    await mongoose.disconnect();
+    if (manageConnection) await mongoose.disconnect();
   }
 }
 
-seed().catch((error) => {
-  console.error('❌ Seed failed:', error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  const clearExisting = !process.argv.includes('--if-empty');
+  seed({ clearExisting }).catch((error) => {
+    console.error('❌ Seed failed:', error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { seed };
