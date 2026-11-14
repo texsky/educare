@@ -1,0 +1,54 @@
+version: "3.9"
+
+# Development overrides — use with:
+#   docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # ─────────────────────────────────────────────
+  # MongoDB — expose port for local tools (Compass, mongosh)
+  # ─────────────────────────────────────────────
+  mongodb:
+    ports:
+      - "27017:27017"
+
+  # ─────────────────────────────────────────────
+  # Backend — hot-reload with nodemon, mount source
+  # ─────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: builder          # Use builder stage which has devDeps
+    command: ["npx", "nodemon", "--watch", "src", "src/server.js"]
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DB_NAME:-educare}?authSource=admin
+      MONGO_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DB_NAME:-educare}?authSource=admin
+    volumes:
+      - ./backend/src:/app/src   # Live-mount source for hot reload
+      - backend_uploads:/app/uploads
+      - backend_logs:/app/logs
+    ports:
+      - "5001:5000"              # Expose backend on 5001 (avoids Mac AirPlay port 5000 conflict)
+
+  # ─────────────────────────────────────────────
+  # Frontend — Vite dev server with HMR
+  # ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+    environment:
+      NODE_ENV: development
+      VITE_BACKEND_URL: http://backend:5000
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/vite.config.js:/app/vite.config.js
+      - ./frontend/index.html:/app/index.html
+    ports:
+      - "5173:5173"              # Vite default dev port
+    depends_on:
+      - backend
