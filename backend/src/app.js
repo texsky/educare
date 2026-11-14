@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const fs = require('fs');
 const path = require('path');
 const logger = require('./config/logger');
 const routes = require('./routes');
@@ -19,18 +20,19 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,ht
   .split(',')
   .map((o) => o.trim());
 
-app.use(
+app.use((req, res, next) => {
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. mobile apps or curl) or if origin is in whitelist
-      if (!origin || allowedOrigins.includes(origin)) {
+      const requestHost = req.get('host');
+      const sameHostOrigin = origin === `https://${requestHost}` || origin === `http://${requestHost}`;
+      if (!origin || allowedOrigins.includes(origin) || sameHostOrigin) {
         return callback(null, true);
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
-  })
-);
+  })(req, res, next);
+});
 
 // HTTP request logging via Morgan hooked to Winston stream
 const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
@@ -67,6 +69,19 @@ app.get('/health', (req, res) => {
 const apiVersion = process.env.API_VERSION || 'v1';
 app.use(`/api/${apiVersion}`, routes);
 app.use('/api', routes);
+
+const frontendDistPath = path.resolve(__dirname, '../../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path === '/api' || req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+      return next();
+    }
+    return res.sendFile(path.join(frontendDistPath, 'index.html'), (error) => {
+      if (error) next(error);
+    });
+  });
+}
 
 // 404 handler for unmatched routes
 app.all('*', (req, res, next) => {

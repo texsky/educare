@@ -239,6 +239,31 @@ make dev
 
 ## Production Deployment
 
+### Deploy to Render with Docker
+
+The root `Dockerfile` builds the React frontend and Node.js API into one Render
+web service. In Render, create a **Web Service**, connect this repository, set
+the root directory to `.`, choose **Docker** as the runtime, and use
+`./Dockerfile` as the Dockerfile path. Render supplies the listening `PORT`.
+
+Add these environment variables in the Render dashboard:
+
+| Variable | Value |
+|---|---|
+| `MONGODB_URI` | Connection string for a reachable MongoDB deployment (for example, MongoDB Atlas) |
+| `JWT_SECRET` | A long, random secret for access tokens |
+| `JWT_REFRESH_SECRET` | A separate long, random secret for refresh tokens |
+| `NODE_ENV` | `production` |
+
+Set any optional email, SMS, school branding, and upload variables there as
+needed. Do not put production secrets in the Dockerfile or commit them to the
+repository. Configure the MongoDB provider's network access to allow the
+Render service to connect. The API health check is available at `/health`.
+
+Render's container filesystem is ephemeral. If users need uploaded photos and
+memo PDFs to survive redeployments, attach a persistent disk at
+`/app/backend/uploads` and set `UPLOAD_DIR=/app/backend/uploads`.
+
 ### Minimum server requirements
 - 2 vCPU, 2 GB RAM (4 GB recommended)
 - 20 GB disk (more if storing many file uploads locally)
