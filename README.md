@@ -257,8 +257,10 @@ Add these environment variables in the Render dashboard:
 
 Set any optional email, SMS, school branding, and upload variables there as
 needed. Do not put production secrets in the Dockerfile or commit them to the
-repository. Configure the MongoDB provider's network access to allow the
-Render service to connect. The API health check is available at `/health`.
+repository. Without a reachable MongoDB URI, the service will not start; do not
+use the Docker Compose hostname `mongodb` for Render. Configure the MongoDB
+provider's network access to allow the Render service to connect. The API
+health check is available at `/health`.
 
 Render's container filesystem is ephemeral. If users need uploaded photos and
 memo PDFs to survive redeployments, attach a persistent disk at
